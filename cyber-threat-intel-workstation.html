@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS::SENTINEL — Cyber Threat Intelligence Workstation</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+--neon-pink:#ff2d95;--neon-cyan:#00f0ff;--neon-purple:#b829dd;--neon-blue:#4d4dff;
+--hot-magenta:#ff00aa;--deep-violet:#1a0033;--void-black:#0a0014;--grid-purple:#2a0845;
+--surface-1:rgba(26,0,51,0.85);--surface-2:rgba(42,8,69,0.6);--surface-3:rgba(77,77,255,0.08);
+--text-primary:#e0d0ff;--text-secondary:#9080b0;--text-muted:#604080;
+--glow-pink:0 0 20px rgba(255,45,149,0.5),0 0 40px rgba(255,45,149,0.2);
+--glow-cyan:0 0 20px rgba(0,240,255,0.5),0 0 40px rgba(0,240,255,0.2);
+--glow-purple:0 0 20px rgba(184,41,221,0.5),0 0 40px rgba(184,41,221,0.2);
+--scan-line:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);
+}
+html{font-size:14px;scrollbar-width:thin;scrollbar-color:var(--neon-purple) var(--void-black)}
+body{background:var(--void-black);color:var(--text-primary);font-family:'Share Tech Mono',monospace;overflow-x:hidden;min-height:100vh}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--void-black)}::-webkit-scrollbar-thumb{background:var(--neon-purple);border-radius:3px}
+
+/* === BOOT SCREEN === */
+#bootScreen{position:fixed;inset:0;z-index:10000;background:var(--void-black);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.8s,visibility 0.8s}
+#bootScreen.hidden{opacity:0;visibility:hidden;pointer-events:none}
+#bootScreen .logo{font-family:'Orbitron',sans-serif;font-size:3rem;font-weight:900;background:linear-gradient(135deg,var(--neon-cyan),var(--neon-pink),var(--neon-purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none;margin-bottom:2rem;letter-spacing:0.2em;animation:logoPulse 2s ease-in-out infinite}
+@keyframes logoPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.3)}}
+#bootLog{font-size:0.75rem;color:var(--neon-cyan);max-width:600px;width:90%;line-height:1.8;opacity:0.9}
+#bootLog div{opacity:0;animation:bootLine 0.3s forwards}
+@keyframes bootLine{to{opacity:1}}
+#bootProgress{width:300px;height:3px;background:var(--surface-2);margin-top:2rem;border-radius:2px;overflow:hidden}
+#bootProgress .bar{height:100%;width:0;background:linear-gradient(90deg,var(--neon-cyan),var(--neon-pink));transition:width 0.3s;box-shadow:var(--glow-cyan)}
+
+/* === BACKGROUND === */
+#bgCanvas{position:fixed;inset:0;z-index:0;pointer-events:none}
+
+/* === MAIN LAYOUT === */
+.app{position:relative;z-index:1;display:grid;grid-template-rows:auto 1fr;grid-template-columns:280px 1fr 320px;min-height:100vh;gap:1px;background:rgba(184,41,221,0.15)}
+.app::before{content:'';position:fixed;inset:0;background:var(--scan-line);pointer-events:none;z-index:9999;opacity:0.4}
+
+/* === HEADER === */
+header{grid-column:1/-1;background:var(--surface-1);border-bottom:1px solid rgba(184,41,221,0.3);padding:0.75rem 1.5rem;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(20px)}
+.header-left{display:flex;align-items:center;gap:1rem}
+.header-logo{font-family:'Orbitron',sans-serif;font-size:1.1rem;font-weight:800;letter-spacing:0.15em;background:linear-gradient(90deg,var(--neon-cyan),var(--neon-pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header-divider{width:1px;height:24px;background:linear-gradient(180deg,transparent,var(--neon-purple),transparent)}
+.header-subtitle{font-family:'Rajdhani',sans-serif;font-size:0.8rem;color:var(--text-secondary);letter-spacing:0.3em;text-transform:uppercase}
+.header-center{display:flex;gap:0.5rem;align-items:center}
+.status-chip{padding:0.25rem 0.75rem;border-radius:2px;font-size:0.7rem;letter-spacing:0.1em;border:1px solid;display:flex;align-items:center;gap:0.4rem}
+.status-chip .dot{width:6px;height:6px;border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.status-online{border-color:rgba(0,255,136,0.4);color:#00ff88}.status-online .dot{background:#00ff88}
+.status-threats{border-color:rgba(255,45,149,0.4);color:var(--neon-pink)}.status-threats .dot{background:var(--neon-pink)}
+.status-scanning{border-color:rgba(0,240,255,0.4);color:var(--neon-cyan)}.status-scanning .dot{background:var(--neon-cyan)}
+.header-right{display:flex;align-items:center;gap:1.5rem}
+.header-time{font-family:'Orbitron',sans-serif;font-size:0.85rem;color:var(--neon-cyan);letter-spacing:0.1em}
+.header-date{font-size:0.65rem;color:var(--text-muted);letter-spacing:0.15em}
+
+/* === SIDEBAR === */
+.sidebar{background:var(--surface-1);backdrop-filter:blur(20px);overflow-y:auto;padding:0}
+.sidebar-section{border-bottom:1px solid rgba(184,41,221,0.15);padding:1rem}
+.sidebar-title{font-family:'Orbitron',sans-serif;font-size:0.65rem;font-weight:600;letter-spacing:0.2em;color:var(--neon-purple);margin-bottom:0.75rem;display:flex;align-items:center;gap:0.5rem}
+.sidebar-title::before{content:'';width:8px;height:2px;background:var(--neon-purple)}
+
+/* IP Analyzer */
+.ip-input-group{display:flex;gap:0.5rem;margin-bottom:0.75rem}
+.ip-input-group input{flex:1;background:var(--surface-3);border:1px solid rgba(184,41,221,0.3);color:var(--text-primary);padding:0.5rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.75rem;border-radius:2px;outline:none;transition:border-color 0.3s}
+.ip-input-group input:focus{border-color:var(--neon-cyan);box-shadow:0 0 10px rgba(0,240,255,0.2)}
+.ip-input-group input::placeholder{color:var(--text-muted)}
+.btn{padding:0.5rem 0.75rem;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:0.75rem;letter-spacing:0.1em;border:1px solid;border-radius:2px;cursor:pointer;transition:all 0.3s;text-transform:uppercase;background:transparent}
+.btn-cyan{border-color:var(--neon-cyan);color:var(--neon-cyan)}.btn-cyan:hover{background:rgba(0,240,255,0.15);box-shadow:var(--glow-cyan)}
+.btn-pink{border-color:var(--neon-pink);color:var(--neon-pink)}.btn-pink:hover{background:rgba(255,45,149,0.15);box-shadow:var(--glow-pink)}
+.btn-purple{border-color:var(--neon-purple);color:var(--neon-purple)}.btn-purple:hover{background:rgba(184,41,221,0.15);box-shadow:var(--glow-purple)}
+
+.ip-results{font-size:0.7rem;line-height:1.6}
+.ip-result-row{display:flex;justify-content:space-between;padding:0.2rem 0;border-bottom:1px solid rgba(184,41,221,0.08)}
+.ip-result-label{color:var(--text-muted)}
+.ip-result-value{color:var(--neon-cyan);text-align:right;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ip-result-value.danger{color:var(--neon-pink)}
+.ip-result-value.safe{color:#00ff88}
+
+/* Hash checker */
+.hash-input{width:100%;background:var(--surface-3);border:1px solid rgba(184,41,221,0.3);color:var(--text-primary);padding:0.5rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.65rem;border-radius:2px;outline:none;margin-bottom:0.5rem;resize:none;transition:border-color 0.3s}
+.hash-input:focus{border-color:var(--neon-pink);box-shadow:0 0 10px rgba(255,45,149,0.2)}
+.hash-type{display:inline-block;padding:0.15rem 0.5rem;font-size:0.6rem;border-radius:2px;margin:0.25rem 0.25rem 0 0;cursor:default}
+
+/* Password analyzer */
+.pw-input{width:100%;background:var(--surface-3);border:1px solid rgba(184,41,221,0.3);color:var(--text-primary);padding:0.5rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.8rem;border-radius:2px;outline:none;margin-bottom:0.75rem;transition:border-color 0.3s}
+.pw-strength-bar{height:4px;background:var(--surface-3);border-radius:2px;overflow:hidden;margin-bottom:0.5rem}
+.pw-strength-fill{height:100%;transition:width 0.5s,background 0.5s;border-radius:2px}
+.pw-stats{font-size:0.7rem;line-height:1.8}
+.pw-stat{display:flex;justify-content:space-between;align-items:center}
+.pw-check{width:14px;text-align:center}
+.pw-check.pass{color:#00ff88}.pw-check.fail{color:var(--neon-pink)}
+
+/* Subnet calc */
+.subnet-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.5rem;font-size:0.65rem}
+.subnet-item{background:var(--surface-3);padding:0.4rem 0.6rem;border-radius:2px;border-left:2px solid var(--neon-purple)}
+.subnet-item .label{color:var(--text-muted);font-size:0.6rem;margin-bottom:0.15rem}
+.subnet-item .value{color:var(--neon-cyan);word-break:break-all}
+
+/* === MAIN CONTENT === */
+.main{background:rgba(10,0,20,0.6);overflow-y:auto;display:flex;flex-direction:column;gap:1px}
+
+/* Tabs */
+.tab-bar{display:flex;background:var(--surface-1);border-bottom:1px solid rgba(184,41,221,0.2)}
+.tab{padding:0.6rem 1.25rem;font-family:'Rajdhani',sans-serif;font-size:0.75rem;font-weight:600;letter-spacing:0.15em;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.3s;text-transform:uppercase}
+.tab:hover{color:var(--text-secondary);background:var(--surface-3)}
+.tab.active{color:var(--neon-cyan);border-bottom-color:var(--neon-cyan)}
+
+.tab-content{flex:1;display:none;overflow-y:auto;padding:1rem}
+.tab-content.active{display:block}
+
+/* Threat Feed */
+.threat-feed{display:flex;flex-direction:column;gap:0.5rem}
+.threat-card{background:var(--surface-1);border:1px solid rgba(184,41,221,0.2);border-radius:3px;padding:0.75rem 1rem;transition:all 0.3s;cursor:default;animation:cardSlide 0.5s ease-out}
+@keyframes cardSlide{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.threat-card:hover{border-color:var(--neon-purple);box-shadow:0 0 20px rgba(184,41,221,0.1)}
+.threat-card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem}
+.threat-card-title{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:0.85rem;color:var(--text-primary)}
+.threat-severity{padding:0.15rem 0.5rem;font-size:0.6rem;font-weight:700;letter-spacing:0.1em;border-radius:2px;font-family:'Orbitron',sans-serif}
+.severity-critical{background:rgba(255,0,60,0.2);color:#ff003c;border:1px solid rgba(255,0,60,0.4)}
+.severity-high{background:rgba(255,45,149,0.2);color:var(--neon-pink);border:1px solid rgba(255,45,149,0.4)}
+.severity-medium{background:rgba(255,170,0,0.2);color:#ffaa00;border:1px solid rgba(255,170,0,0.4)}
+.severity-low{background:rgba(0,240,255,0.2);color:var(--neon-cyan);border:1px solid rgba(0,240,255,0.4)}
+.threat-card-body{font-size:0.7rem;color:var(--text-secondary);line-height:1.5;margin-bottom:0.5rem}
+.threat-card-meta{display:flex;gap:1rem;font-size:0.6rem;color:var(--text-muted)}
+.threat-card-meta span{display:flex;align-items:center;gap:0.3rem}
+.threat-tag{display:inline-block;padding:0.1rem 0.4rem;background:var(--surface-3);border:1px solid rgba(184,41,221,0.2);border-radius:2px;font-size:0.55rem;color:var(--neon-purple);margin-right:0.3rem}
+
+/* Network scanner */
+.scanner-controls{display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center}
+.scanner-controls input{flex:1;min-width:200px}
+.scan-results{display:flex;flex-direction:column;gap:0.25rem}
+.scan-row{display:grid;grid-template-columns:140px 80px 80px 1fr 100px;gap:0.5rem;padding:0.5rem 0.75rem;background:var(--surface-1);border:1px solid rgba(184,41,221,0.1);border-radius:2px;font-size:0.7rem;align-items:center;animation:cardSlide 0.3s ease-out}
+.scan-row.header{background:var(--surface-2);color:var(--text-muted);font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:0.1em;font-size:0.65rem;text-transform:uppercase;border:none}
+.port-open{color:#00ff88}.port-closed{color:var(--neon-pink)}.port-filtered{color:#ffaa00}
+.scan-service{color:var(--neon-cyan)}
+
+/* Base64 / Encoding */
+.encoder-area{display:grid;grid-template-columns:1fr 1fr;gap:1rem;height:300px}
+.encoder-pane{display:flex;flex-direction:column;gap:0.5rem}
+.encoder-pane textarea{flex:1;background:var(--surface-1);border:1px solid rgba(184,41,221,0.3);color:var(--text-primary);padding:0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.75rem;border-radius:2px;outline:none;resize:none}
+.encoder-pane textarea:focus{border-color:var(--neon-cyan)}
+.encoder-pane label{font-family:'Rajdhani',sans-serif;font-size:0.7rem;letter-spacing:0.15em;color:var(--text-muted);text-transform:uppercase}
+.encoder-btns{display:flex;gap:0.5rem;align-items:center;justify-content:center;flex-direction:column}
+.encoder-btns .btn{width:100%;font-size:0.65rem}
+.encoding-select{background:var(--surface-3);border:1px solid rgba(184,41,221,0.3);color:var(--text-primary);padding:0.4rem;font-family:'Share Tech Mono',monospace;font-size:0.7rem;border-radius:2px;outline:none;margin-bottom:0.5rem}
+
+/* JWT Decoder */
+.jwt-input{width:100%;min-height:80px;background:var(--surface-1);border:1px solid rgba(184,41,221,0.3);color:var(--neon-pink);padding:0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.7rem;border-radius:2px;outline:none;resize:vertical;margin-bottom:1rem;word-break:break-all}
+.jwt-sections{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
+.jwt-section{background:var(--surface-1);border:1px solid rgba(184,41,221,0.2);border-radius:3px;padding:0.75rem;overflow:auto}
+.jwt-section-title{font-family:'Orbitron',sans-serif;font-size:0.6rem;letter-spacing:0.15em;margin-bottom:0.5rem;padding-bottom:0.3rem;border-bottom:1px solid rgba(184,41,221,0.2)}
+.jwt-section:nth-child(1) .jwt-section-title{color:var(--neon-pink)}
+.jwt-section:nth-child(2) .jwt-section-title{color:var(--neon-purple)}
+.jwt-section:nth-child(3) .jwt-section-title{color:var(--neon-cyan)}
+.jwt-section pre{font-size:0.65rem;line-height:1.5;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all}
+
+/* Header analyzer */
+.header-url-input{display:flex;gap:0.5rem;margin-bottom:1rem}
+.header-url-input input{flex:1}
+.headers-grid{display:flex;flex-direction:column;gap:0.25rem}
+.header-row{display:grid;grid-template-columns:200px 1fr 80px;gap:0.5rem;padding:0.5rem 0.75rem;background:var(--surface-1);border:1px solid rgba(184,41,221,0.1);border-radius:2px;font-size:0.7rem;align-items:center}
+.header-row.header-head{background:var(--surface-2);color:var(--text-muted);font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:0.1em;font-size:0.65rem;text-transform:uppercase}
+.grade-a{color:#00ff88;font-weight:700}.grade-b{color:var(--neon-cyan)}.grade-c{color:#ffaa00}.grade-f{color:var(--neon-pink);font-weight:700}
+
+/* === RIGHT PANEL === */
+.right-panel{background:var(--surface-1);backdrop-filter:blur(20px);overflow-y:auto;padding:0}
+
+/* Threat radar */
+.radar-container{padding:1rem;border-bottom:1px solid rgba(184,41,221,0.15)}
+#radarCanvas{width:100%;aspect-ratio:1;border-radius:3px}
+
+/* Live log */
+.log-container{padding:1rem;border-bottom:1px solid rgba(184,41,221,0.15)}
+.log-entries{max-height:200px;overflow-y:auto;font-size:0.6rem;line-height:1.6}
+.log-entry{padding:0.15rem 0;border-bottom:1px solid rgba(184,41,221,0.05);display:flex;gap:0.5rem}
+.log-time{color:var(--text-muted);white-space:nowrap}
+.log-msg{word-break:break-all}
+.log-info{color:var(--neon-cyan)}.log-warn{color:#ffaa00}.log-error{color:var(--neon-pink)}.log-success{color:#00ff88}
+
+/* Metrics */
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;padding:1rem;border-bottom:1px solid rgba(184,41,221,0.15)}
+.metric-card{background:var(--surface-3);border:1px solid rgba(184,41,221,0.15);border-radius:3px;padding:0.6rem;text-align:center}
+.metric-value{font-family:'Orbitron',sans-serif;font-size:1.1rem;font-weight:700;margin-bottom:0.2rem}
+.metric-label{font-size:0.55rem;color:var(--text-muted);letter-spacing:0.15em;text-transform:uppercase}
+.metric-pink .metric-value{color:var(--neon-pink)}
+.metric-cyan .metric-value{color:var(--neon-cyan)}
+.metric-purple .metric-value{color:var(--neon-purple)}
+.metric-green .metric-value{color:#00ff88}
+
+/* MITRE matrix mini */
+.mitre-container{padding:1rem}
+.mitre-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0.3rem}
+.mitre-cell{background:var(--surface-3);border:1px solid rgba(184,41,221,0.1);border-radius:2px;padding:0.35rem;font-size:0.5rem;color:var(--text-muted);cursor:default;transition:all 0.3s;text-align:center;line-height:1.3}
+.mitre-cell:hover{border-color:var(--neon-purple);color:var(--text-primary);background:rgba(184,41,221,0.15)}
+.mitre-cell.active{border-color:var(--neon-pink);color:var(--neon-pink);background:rgba(255,45,149,0.1)}
+
+/* Responsive */
+@media(max-width:1200px){.app{grid-template-columns:1fr}.sidebar,.right-panel{display:none}.app{grid-template-columns:1fr;grid-template-rows:auto 1fr}}
+@media(max-width:768px){header{flex-direction:column;gap:0.5rem}.header-center{flex-wrap:wrap;justify-content:center}.tab{padding:0.5rem 0.75rem;font-size:0.65rem}.encoder-area{grid-template-columns:1fr}.jwt-sections{grid-template-columns:1fr}}
+
+/* Utility */
+.hidden{display:none!important}
+.mono{font-family:'Share Tech Mono',monospace}
+.text-cyan{color:var(--neon-cyan)}.text-pink{color:var(--neon-pink)}.text-purple{color:var(--neon-purple)}.text-green{color:#00ff88}
+.mb-sm{margin-bottom:0.5rem}.mb-md{margin-bottom:1rem}
+.loading{display:inline-block;width:12px;height:12px;border:2px solid var(--surface-2);border-top-color:var(--neon-cyan);border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.input-std{width:100%;background:var(--surface-3);border:1px solid rgba(184,41,221,0.3);color:var(--text-primary);padding:0.5rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.75rem;border-radius:2px;outline:none;transition:border-color 0.3s}
+.input-std:focus{border-color:var(--neon-cyan);box-shadow:0 0 10px rgba(0,240,255,0.15)}
+</style>
+</head>
+<body>
+
+<!-- BOOT SCREEN -->
+<div id="bootScreen">
+  <div class="logo">NEXUS::SENTINEL</div>
+  <div id="bootLog"></div>
+  <div id="bootProgress"><div class="bar"></div></div>
+</div>
+
+<!-- BACKGROUND CANVAS -->
+<canvas id="bgCanvas"></canvas>
+
+<!-- MAIN APP -->
+<div class="app" id="app" style="opacity:0">
+  <!-- HEADER -->
+  <header>
+    <div class="header-left">
+      <div class="header-logo">NEXUS::SENTINEL</div>
+      <div class="header-divider"></div>
+      <div class="header-subtitle">Threat Intelligence Workstation</div>
+    </div>
+    <div class="header-center">
+      <div class="status-chip status-online"><div class="dot"></div>SYSTEMS NOMINAL</div>
+      <div class="status-chip status-threats"><div class="dot"></div>THREATS: <span id="threatCount">0</span></div>
+      <div class="status-chip status-scanning"><div class="dot"></div>SCANNING</div>
+    </div>
+    <div class="header-right">
+      <div>
+        <div class="header-time" id="headerTime">00:00:00</div>
+        <div class="header-date" id="headerDate">0000-00-00</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <!-- IP Intelligence -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">IP Intelligence</div>
+      <div class="ip-input-group">
+        <input type="text" id="ipInput" placeholder="Enter IP address..." spellcheck="false">
+        <button class="btn btn-cyan" onclick="analyzeIP()">Scan</button>
+      </div>
+      <div id="ipResults" class="ip-results"></div>
+    </div>
+
+    <!-- Password Strength -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Password Auditor</div>
+      <input type="text" class="pw-input" id="pwInput" placeholder="Test password strength..." oninput="analyzePassword()" spellcheck="false" autocomplete="off">
+      <div class="pw-strength-bar"><div class="pw-strength-fill" id="pwStrengthFill"></div></div>
+      <div id="pwLabel" style="font-size:0.7rem;margin-bottom:0.5rem;font-family:'Orbitron',sans-serif;font-size:0.6rem;letter-spacing:0.1em">—</div>
+      <div class="pw-stats" id="pwStats"></div>
+    </div>
+
+    <!-- Hash Identifier -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Hash Identifier</div>
+      <textarea class="hash-input" id="hashInput" rows="2" placeholder="Paste hash to identify..." oninput="identifyHash()" spellcheck="false"></textarea>
+      <div id="hashResults"></div>
+    </div>
+
+    <!-- Subnet Calculator -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Subnet Calculator</div>
+      <div class="ip-input-group">
+        <input type="text" id="subnetInput" placeholder="10.0.0.0/24" spellcheck="false">
+        <button class="btn btn-purple" onclick="calcSubnet()">Calc</button>
+      </div>
+      <div class="subnet-grid" id="subnetResults"></div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main">
+    <div class="tab-bar">
+      <div class="tab active" data-tab="threatFeed">Threat Feed</div>
+      <div class="tab" data-tab="portScanner">Port Scanner</div>
+      <div class="tab" data-tab="encoder">Encode/Decode</div>
+      <div class="tab" data-tab="jwtDecoder">JWT Decoder</div>
+      <div class="tab" data-tab="headerCheck">Header Check</div>
+    </div>
+
+    <!-- Threat Feed -->
+    <div class="tab-content active" id="threatFeed">
+      <div class="threat-feed" id="threatFeedContainer"></div>
+    </div>
+
+    <!-- Port Scanner -->
+    <div class="tab-content" id="portScanner">
+      <div class="scanner-controls">
+        <input type="text" class="input-std" id="scanTarget" placeholder="Target hostname (simulated)" spellcheck="false" style="min-width:200px">
+        <select class="encoding-select" id="scanProfile">
+          <option value="quick">Quick Scan (Top 20)</option>
+          <option value="common">Common Ports (Top 100)</option>
+          <option value="full">Full Scan (1-1024)</option>
+        </select>
+        <button class="btn btn-pink" onclick="runPortScan()">Execute Scan</button>
+      </div>
+      <div class="scan-results" id="scanResults">
+        <div class="scan-row header">
+          <div>PORT</div><div>STATE</div><div>PROTO</div><div>SERVICE</div><div>VERSION</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Encoder/Decoder -->
+    <div class="tab-content" id="encoder">
+      <div style="margin-bottom:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+        <select class="encoding-select" id="encodingType">
+          <option value="base64">Base64</option>
+          <option value="url">URL Encoding</option>
+          <option value="hex">Hexadecimal</option>
+          <option value="binary">Binary</option>
+          <option value="rot13">ROT13</option>
+          <option value="html">HTML Entities</option>
+          <option value="reverse">Reverse</option>
+        </select>
+      </div>
+      <div class="encoder-area">
+        <div class="encoder-pane">
+          <label>Plaintext / Decoded</label>
+          <textarea id="encoderInput" placeholder="Enter text to encode..."></textarea>
+        </div>
+        <div class="encoder-pane">
+          <label>Encoded / Ciphertext</label>
+          <textarea id="encoderOutput" placeholder="Encoded output appears here..."></textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:0.5rem;margin-top:0.75rem;justify-content:center">
+        <button class="btn btn-cyan" onclick="encodeText()">Encode →</button>
+        <button class="btn btn-pink" onclick="decodeText()">← Decode</button>
+      </div>
+    </div>
+
+    <!-- JWT Decoder -->
+    <div class="tab-content" id="jwtDecoder">
+      <textarea class="jwt-input" id="jwtInput" placeholder="Paste JWT token here (e.g. eyJhbGciOiJIUzI1NiIs...)" oninput="decodeJWT()" spellcheck="false"></textarea>
+      <div class="jwt-sections" id="jwtSections">
+        <div class="jwt-section"><div class="jwt-section-title">HEADER</div><pre id="jwtHeader">Awaiting token...</pre></div>
+        <div class="jwt-section"><div class="jwt-section-title">PAYLOAD</div><pre id="jwtPayload">Awaiting token...</pre></div>
+        <div class="jwt-section"><div class="jwt-section-title">SIGNATURE</div><pre id="jwtSignature">Awaiting token...</pre></div>
+      </div>
+    </div>
+
+    <!-- Security Header Checker -->
+    <div class="tab-content" id="headerCheck">
+      <div class="header-url-input">
+        <input type="text" class="input-std" id="headerUrl" placeholder="Enter domain to check headers (simulated)" spellcheck="false">
+        <button class="btn btn-cyan" onclick="checkHeaders()">Analyze</button>
+      </div>
+      <div id="headerGrade" style="text-align:center;margin-bottom:1rem"></div>
+      <div class="headers-grid" id="headersGrid">
+        <div class="header-row header-head"><div>Header</div><div>Status</div><div>Grade</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <!-- Threat Radar -->
+    <div class="radar-container">
+      <div class="sidebar-title">Threat Radar</div>
+      <canvas id="radarCanvas"></canvas>
+    </div>
+
+    <!-- Live Log -->
+    <div class="log-container">
+      <div class="sidebar-title">System Log</div>
+      <div class="log-entries" id="logEntries"></div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="metrics-grid">
+      <div class="metric-card metric-pink"><div class="metric-value" id="metricThreats">0</div><div class="metric-label">Threats/hr</div></div>
+      <div class="metric-card metric-cyan"><div class="metric-value" id="metricPackets">0</div><div class="metric-label">Packets/s</div></div>
+      <div class="metric-card metric-purple"><div class="metric-value" id="metricLatency">0</div><div class="metric-label">Latency ms</div></div>
+      <div class="metric-card metric-green"><div class="metric-value" id="metricUptime">99.97%</div><div class="metric-label">Uptime</div></div>
+    </div>
+
+    <!-- MITRE Tactics -->
+    <div class="mitre-container">
+      <div class="sidebar-title">MITRE ATT&CK Coverage</div>
+      <div class="mitre-grid" id="mitreGrid"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============== BOOT SEQUENCE ==============
+const bootMessages = [
+  '[BIOS] NEXUS::SENTINEL v4.2.0 initializing...',
+  '[CORE] Loading threat intelligence modules...',
+  '[NET] Establishing secure channels... AES-256-GCM',
+  '[DB] Mounting CVE database (2024-2026)...',
+  '[AI] Neural threat classifier online...',
+  '[SCAN] Port analysis engine ready',
+  '[CRYPTO] Hash identification system loaded',
+  '[MITRE] ATT&CK framework v14 synced',
+  '[GEO] IP geolocation service connected',
+  '[RADAR] Threat radar calibrated',
+  '[SYS] All subsystems operational ✓',
+  '[BOOT] Workstation ready. Welcome, Operator.'
+];
+
+async function runBoot() {
+  const log = document.getElementById('bootLog');
+  const bar = document.querySelector('#bootProgress .bar');
+  for (let i = 0; i < bootMessages.length; i++) {
+    const div = document.createElement('div');
+    div.textContent = bootMessages[i];
+    div.style.animationDelay = '0s';
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+    bar.style.width = ((i + 1) / bootMessages.length * 100) + '%';
+    await sleep(180 + Math.random() * 120);
+  }
+  await sleep(400);
+  document.getElementById('bootScreen').classList.add('hidden');
+  document.getElementById('app').style.opacity = '1';
+  document.getElementById('app').style.transition = 'opacity 0.8s';
+  startApp();
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ============== BACKGROUND GRID ==============
+const bgCanvas = document.getElementById('bgCanvas');
+const bgCtx = bgCanvas.getContext('2d');
+function resizeBg() { bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight; }
+window.addEventListener('resize', resizeBg);
+resizeBg();
+
+let bgTime = 0;
+function drawBg() {
+  bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+  
+  // Perspective grid
+  bgCtx.strokeStyle = 'rgba(184,41,221,0.08)';
+  bgCtx.lineWidth = 1;
+  const horizon = bgCanvas.height * 0.4;
+  const gridSize = 60;
+  const speed = bgTime * 0.5;
+  
+  for (let x = -bgCanvas.width; x < bgCanvas.width * 2; x += gridSize) {
+    bgCtx.beginPath();
+    bgCtx.moveTo(bgCanvas.width / 2, horizon);
+    bgCtx.lineTo(x, bgCanvas.height);
+    bgCtx.stroke();
+  }
+  
+  for (let i = 0; i < 20; i++) {
+    const t = (i / 20 + (speed % gridSize) / gridSize / 20) ;
+    const y = horizon + (bgCanvas.height - horizon) * Math.pow(t, 1.5);
+    bgCtx.beginPath();
+    bgCtx.moveTo(0, y);
+    bgCtx.lineTo(bgCanvas.width, y);
+    bgCtx.stroke();
+  }
+  
+  // Sun
+  const sunGrad = bgCtx.createRadialGradient(bgCanvas.width / 2, horizon, 0, bgCanvas.width / 2, horizon, 150);
+  sunGrad.addColorStop(0, 'rgba(255,45,149,0.15)');
+  sunGrad.addColorStop(0.5, 'rgba(184,41,221,0.05)');
+  sunGrad.addColorStop(1, 'transparent');
+  bgCtx.fillStyle = sunGrad;
+  bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+  
+  bgTime++;
+  requestAnimationFrame(drawBg);
+}
+drawBg();
+
+// ============== CLOCK ==============
+function updateClock() {
+  const now = new Date();
+  document.getElementById('headerTime').textContent = now.toTimeString().split(' ')[0];
+  document.getElementById('headerDate').textContent = now.toISOString().split('T')[0];
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ============== TABS ==============
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ============== IP INTELLIGENCE ==============
+function analyzeIP() {
+  const ip = document.getElementById('ipInput').value.trim();
+  if (!ip) return;
+  const container = document.getElementById('ipResults');
+  container.innerHTML = '<div class="loading"></div> Analyzing...';
+  
+  setTimeout(() => {
+    // Simulated rich intel
+    const isPrivate = ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('172.16');
+    const riskScore = isPrivate ? 0 : Math.floor(Math.random() * 100);
+    const data = {
+      'IP Address': ip,
+      'Type': isPrivate ? 'Private (RFC 1918)' : 'Public',
+      'Risk Score': `${riskScore}/100`,
+      'ASN': isPrivate ? 'N/A' : 'AS' + (13335 + Math.floor(Math.random() * 50000)),
+      'ISP': isPrivate ? 'Local Network' : ['Cloudflare', 'Amazon AWS', 'Google LLC', 'DigitalOcean', 'Microsoft Azure', 'OVH SAS'][Math.floor(Math.random() * 6)],
+      'Country': isPrivate ? 'N/A' : ['US', 'DE', 'NL', 'GB', 'JP', 'SG', 'RU', 'CN', 'BR'][Math.floor(Math.random() * 9)],
+      'Abuse Reports': isPrivate ? '0' : Math.floor(Math.random() * 200).toString(),
+      'Tor Exit Node': Math.random() > 0.9 ? 'YES' : 'NO',
+      'Known Proxy': Math.random() > 0.8 ? 'YES' : 'NO',
+      'Last Seen': isPrivate ? 'N/A' : new Date(Date.now() - Math.random() * 86400000 * 30).toISOString().split('T')[0]
+    };
+    
+    container.innerHTML = Object.entries(data).map(([k, v]) => {
+      let cls = '';
+      if (k === 'Risk Score') cls = riskScore > 60 ? 'danger' : riskScore > 30 ? '' : 'safe';
+      if (k === 'Tor Exit Node' && v === 'YES') cls = 'danger';
+      if (k === 'Known Proxy' && v === 'YES') cls = 'danger';
+      return `<div class="ip-result-row"><span class="ip-result-label">${k}</span><span class="ip-result-value ${cls}">${v}</span></div>`;
+    }).join('');
+    
+    addLog(riskScore > 60 ? 'error' : 'info', `IP scan: ${ip} — Risk: ${riskScore}/100`);
+  }, 800);
+}
+
+// ============== PASSWORD AUDITOR ==============
+function analyzePassword() {
+  const pw = document.getElementById('pwInput').value;
+  const fill = document.getElementById('pwStrengthFill');
+  const label = document.getElementById('pwLabel');
+  const stats = document.getElementById('pwStats');
+  
+  if (!pw) {
+    fill.style.width = '0';
+    label.textContent = '—';
+    stats.innerHTML = '';
+    return;
+  }
+  
+  let score = 0;
+  const checks = [
+    { label: 'Length ≥ 8', pass: pw.length >= 8 },
+    { label: 'Length ≥ 12', pass: pw.length >= 12 },
+    { label: 'Length ≥ 16', pass: pw.length >= 16 },
+    { label: 'Uppercase letters', pass: /[A-Z]/.test(pw) },
+    { label: 'Lowercase letters', pass: /[a-z]/.test(pw) },
+    { label: 'Numbers', pass: /[0-9]/.test(pw) },
+    { label: 'Special characters', pass: /[^A-Za-z0-9]/.test(pw) },
+    { label: 'No common patterns', pass: !/(password|123456|qwerty|admin|letmein|welcome)/i.test(pw) },
+    { label: 'No repeated chars (3+)', pass: !/(.)\1{2,}/.test(pw) },
+    { label: 'No keyboard walks', pass: !/(qwert|asdf|zxcv|1234|4321)/i.test(pw) },
+  ];
+  
+  checks.forEach(c => { if (c.pass) score += 10; });
+  
+  // Entropy calculation
+  let charsetSize = 0;
+  if (/[a-z]/.test(pw)) charsetSize += 26;
+  if (/[A-Z]/.test(pw)) charsetSize += 26;
+  if (/[0-9]/.test(pw)) charsetSize += 10;
+  if (/[^A-Za-z0-9]/.test(pw)) charsetSize += 33;
+  const entropy = Math.floor(pw.length * Math.log2(charsetSize || 1));
+  
+  const levels = [
+    { min: 0, label: 'CRITICAL', color: '#ff003c' },
+    { min: 20, label: 'WEAK', color: '#ff2d95' },
+    { min: 40, label: 'FAIR', color: '#ffaa00' },
+    { min: 60, label: 'STRONG', color: '#00f0ff' },
+    { min: 80, label: 'EXCELLENT', color: '#00ff88' }
+  ];
+  
+  const level = [...levels].reverse().find(l => score >= l.min);
+  fill.style.width = score + '%';
+  fill.style.background = level.color;
+  fill.style.boxShadow = `0 0 10px ${level.color}50`;
+  label.style.color = level.color;
+  label.textContent = `${level.label} (${score}/100 • ${entropy}-bit entropy)`;
+  
+  // Crack time estimate
+  const guessesPerSec = 1e10; // 10B guesses/sec (GPU cluster)
+  const combinations = Math.pow(charsetSize || 1, pw.length);
+  const seconds = combinations / guessesPerSec / 2;
+  let crackTime;
+  if (seconds < 1) crackTime = 'Instant';
+  else if (seconds < 60) crackTime = Math.floor(seconds) + ' seconds';
+  else if (seconds < 3600) crackTime = Math.floor(seconds / 60) + ' minutes';
+  else if (seconds < 86400) crackTime = Math.floor(seconds / 3600) + ' hours';
+  else if (seconds < 86400 * 365) crackTime = Math.floor(seconds / 86400) + ' days';
+  else if (seconds < 86400 * 365 * 1000) crackTime = Math.floor(seconds / 86400 / 365) + ' years';
+  else if (seconds < 86400 * 365 * 1e6) crackTime = Math.floor(seconds / 86400 / 365 / 1000) + 'K years';
+  else crackTime = '∞ (heat death of universe)';
+  
+  stats.innerHTML = checks.map(c =>
+    `<div class="pw-stat"><span>${c.label}</span><span class="pw-check ${c.pass ? 'pass' : 'fail'}">${c.pass ? '✓' : '✗'}</span></div>`
+  ).join('') + `<div class="pw-stat" style="margin-top:0.5rem;border-top:1px solid rgba(184,41,221,0.2);padding-top:0.3rem"><span>Crack Time (10B/s)</span><span class="text-cyan">${crackTime}</span></div>`;
+}
+
+// ============== HASH IDENTIFIER ==============
+function identifyHash() {
+  const hash = document.getElementById('hashInput').value.trim();
+  const container = document.getElementById('hashResults');
+  if (!hash) { container.innerHTML = ''; return; }
+  
+  const types = [];
+  const len = hash.length;
+  const isHex = /^[a-fA-F0-9]+$/.test(hash);
+  const isBase64 = /^[A-Za-z0-9+/]+=*$/.test(hash);
+  
+  if (isHex) {
+    if (len === 32) types.push({ name: 'MD5', confidence: 95, color: 'var(--neon-pink)' }, { name: 'NTLM', confidence: 70, color: '#ffaa00' });
+    if (len === 40) types.push({ name: 'SHA-1', confidence: 95, color: 'var(--neon-pink)' }, { name: 'RIPEMD-160', confidence: 40, color: 'var(--text-muted)' });
+    if (len === 64) types.push({ name: 'SHA-256', confidence: 95, color: 'var(--neon-cyan)' }, { name: 'SHA3-256', confidence: 50, color: '#ffaa00' }, { name: 'BLAKE2s', confidence: 30, color: 'var(--text-muted)' });
+    if (len === 96) types.push({ name: 'SHA-384', confidence: 90, color: 'var(--neon-cyan)' }, { name: 'SHA3-384', confidence: 50, color: '#ffaa00' });
+    if (len === 128) types.push({ name: 'SHA-512', confidence: 95, color: 'var(--neon-purple)' }, { name: 'SHA3-512', confidence: 50, color: '#ffaa00' }, { name: 'BLAKE2b', confidence: 30, color: 'var(--text-muted)' });
+    if (len === 8) types.push({ name: 'CRC32', confidence: 80, color: '#ffaa00' });
+  }
+  if (hash.startsWith('$2b$') || hash.startsWith('$2a$') || hash.startsWith('$2y$')) types.push({ name: 'bcrypt', confidence: 99, color: '#00ff88' });
+  if (hash.startsWith('$6$')) types.push({ name: 'SHA-512crypt', confidence: 99, color: '#00ff88' });
+  if (hash.startsWith('$5$')) types.push({ name: 'SHA-256crypt', confidence: 99, color: '#00ff88' });
+  if (hash.startsWith('$argon2')) types.push({ name: 'Argon2', confidence: 99, color: '#00ff88' });
+  if (hash.startsWith('$1$')) types.push({ name: 'MD5crypt', confidence: 99, color: 'var(--neon-pink)' });
+  if (hash.startsWith('pbkdf2')) types.push({ name: 'PBKDF2', confidence: 95, color: '#00ff88' });
+  
+  if (types.length === 0) {
+    if (isBase64 && len > 20) types.push({ name: 'Base64 encoded', confidence: 60, color: '#ffaa00' });
+    else types.push({ name: 'Unknown format', confidence: 0, color: 'var(--text-muted)' });
+  }
+  
+  container.innerHTML = `<div style="font-size:0.6rem;color:var(--text-muted);margin-bottom:0.3rem">Length: ${len} chars${isHex ? ' • Hex' : ''}${isBase64 ? ' • Base64' : ''}</div>` +
+    types.map(t => `<span class="hash-type" style="background:${t.color}15;border:1px solid ${t.color}40;color:${t.color}">${t.name} (${t.confidence}%)</span>`).join('');
+}
+
+// ============== SUBNET CALCULATOR ==============
+function calcSubnet() {
+  const input = document.getElementById('subnetInput').value.trim();
+  const container = document.getElementById('subnetResults');
+  const match = input.match(/^(\d+\.\d+\.\d+\.\d+)\/(\d+)$/);
+  if (!match) { container.innerHTML = '<div class="subnet-item" style="grid-column:1/-1"><div class="value text-pink">Invalid CIDR notation</div></div>'; return; }
+  
+  const ip = match[1].split('.').map(Number);
+  const prefix = parseInt(match[2]);
+  if (prefix < 0 || prefix > 32 || ip.some(o => o < 0 || o > 255)) { container.innerHTML = '<div class="subnet-item" style="grid-column:1/-1"><div class="value text-pink">Invalid input</div></div>'; return; }
+  
+  const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0;
+  const ipNum = (ip[0] << 24 | ip[1] << 16 | ip[2] << 8 | ip[3]) >>> 0;
+  const network = (ipNum & mask) >>> 0;
+  const broadcast = (network | ~mask) >>> 0;
+  const firstHost = prefix >= 31 ? network : (network + 1) >>> 0;
+  const lastHost = prefix >= 31 ? broadcast : (broadcast - 1) >>> 0;
+  const totalHosts = prefix >= 31 ? (prefix === 32 ? 1 : 2) : Math.pow(2, 32 - prefix) - 2;
+  
+  const toIP = n => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+  const toBin = n => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].map(o => o.toString(2).padStart(8, '0')).join('.');
+  
+  const results = {
+    'Network': toIP(network),
+    'Broadcast': toIP(broadcast),
+    'Subnet Mask': toIP(mask),
+    'First Host': toIP(firstHost),
+    'Last Host': toIP(lastHost),
+    'Total Hosts': totalHosts.toLocaleString(),
+    'Wildcard': toIP(~mask >>> 0),
+    'CIDR': '/' + prefix
+  };
+  
+  container.innerHTML = Object.entries(results).map(([k, v]) =>
+    `<div class="subnet-item"><div class="label">${k}</div><div class="value">${v}</div></div>`
+  ).join('');
+  
+  addLog('success', `Subnet calc: ${input} → ${totalHosts.toLocaleString()} hosts`);
+}
+
+// ============== PORT SCANNER (Simulated) ==============
+const commonPorts = {
+  21:'FTP',22:'SSH',23:'Telnet',25:'SMTP',53:'DNS',80:'HTTP',110:'POP3',111:'RPCbind',
+  135:'MSRPC',139:'NetBIOS',143:'IMAP',443:'HTTPS',445:'SMB',993:'IMAPS',995:'POP3S',
+  1433:'MSSQL',1521:'Oracle',2049:'NFS',3306:'MySQL',3389:'RDP',5432:'PostgreSQL',
+  5900:'VNC',6379:'Redis',8080:'HTTP-Proxy',8443:'HTTPS-Alt',9200:'Elasticsearch',
+  27017:'MongoDB',11211:'Memcached'
+};
+const versions = {
+  'SSH':'OpenSSH 8.9p1','HTTP':'nginx/1.24.0','HTTPS':'Apache/2.4.58','FTP':'vsftpd 3.0.5',
+  'SMTP':'Postfix','DNS':'BIND 9.18','MySQL':'MySQL 8.0.36','PostgreSQL':'PostgreSQL 16.2',
+  'Redis':'Redis 7.2.4','RDP':'Microsoft Terminal Services','SMB':'Samba 4.19','MongoDB':'MongoDB 7.0',
+  'Elasticsearch':'Elasticsearch 8.12'
+};
+
+async function runPortScan() {
+  const target = document.getElementById('scanTarget').value.trim() || 'target-host.local';
+  const profile = document.getElementById('scanProfile').value;
+  const container = document.getElementById('scanResults');
+  container.innerHTML = '<div class="scan-row header"><div>PORT</div><div>STATE</div><div>PROTO</div><div>SERVICE</div><div>VERSION</div></div>';
+  
+  addLog('info', `Port scan initiated: ${target} [${profile}]`);
+  
+  const entries = Object.entries(commonPorts);
+  const count = profile === 'quick' ? 20 : profile === 'common' ? entries.length : entries.length;
+  const ports = entries.slice(0, count);
+  
+  for (const [port, service] of ports) {
+    const state = Math.random() > 0.6 ? 'open' : Math.random() > 0.5 ? 'closed' : 'filtered';
+    const row = document.createElement('div');
+    row.className = 'scan-row';
+    row.innerHTML = `
+      <div>${port}/tcp</div>
+      <div class="port-${state}">${state}</div>
+      <div>TCP</div>
+      <div class="scan-service">${state === 'open' ? service : '—'}</div>
+      <div style="color:var(--text-muted)">${state === 'open' && versions[service] ? versions[service] : '—'}</div>
+    `;
+    container.appendChild(row);
+    await sleep(50 + Math.random() * 100);
+  }
+  
+  addLog('success', `Scan complete: ${target} — ${ports.length} ports checked`);
+}
+
+// ============== ENCODER/DECODER ==============
+function encodeText() {
+  const input = document.getElementById('encoderInput').value;
+  const type = document.getElementById('encodingType').value;
+  let output = '';
+  try {
+    switch (type) {
+      case 'base64': output = btoa(unescape(encodeURIComponent(input))); break;
+      case 'url': output = encodeURIComponent(input); break;
+      case 'hex': output = Array.from(input).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' '); break;
+      case 'binary': output = Array.from(input).map(c => c.charCodeAt(0).toString(2).padStart(8, '0')).join(' '); break;
+      case 'rot13': output = input.replace(/[a-zA-Z]/g, c => String.fromCharCode(c.charCodeAt(0) + (c.toLowerCase() < 'n' ? 13 : -13))); break;
+      case 'html': output = input.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); break;
+      case 'reverse': output = [...input].reverse().join(''); break;
+    }
+  } catch (e) { output = 'Error: ' + e.message; }
+  document.getElementById('encoderOutput').value = output;
+}
+
+function decodeText() {
+  const input = document.getElementById('encoderOutput').value;
+  const type = document.getElementById('encodingType').value;
+  let output = '';
+  try {
+    switch (type) {
+      case 'base64': output = decodeURIComponent(escape(atob(input))); break;
+      case 'url': output = decodeURIComponent(input); break;
+      case 'hex': output = input.split(' ').map(h => String.fromCharCode(parseInt(h, 16))).join(''); break;
+      case 'binary': output = input.split(' ').map(b => String.fromCharCode(parseInt(b, 2))).join(''); break;
+      case 'rot13': output = input.replace(/[a-zA-Z]/g, c => String.fromCharCode(c.charCodeAt(0) + (c.toLowerCase() < 'n' ? 13 : -13))); break;
+      case 'html': { const el = document.createElement('div'); el.innerHTML = input; output = el.textContent; break; }
+      case 'reverse': output = [...input].reverse().join(''); break;
+    }
+  } catch (e) { output = 'Error: ' + e.message; }
+  document.getElementById('encoderInput').value = output;
+}
+
+// ============== JWT DECODER ==============
+function decodeJWT() {
+  const jwt = document.getElementById('jwtInput').value.trim();
+  const parts = jwt.split('.');
+  
+  if (parts.length !== 3) {
+    document.getElementById('jwtHeader').textContent = 'Invalid JWT format\nExpected: header.payload.signature';
+    document.getElementById('jwtPayload').textContent = '';
+    document.getElementById('jwtSignature').textContent = '';
+    return;
+  }
+  
+  try {
+    const header = JSON.parse(atob(parts[0].replace(/-/g, '+').replace(/_/g, '/')));
+    document.getElementById('jwtHeader').textContent = JSON.stringify(header, null, 2);
+  } catch { document.getElementById('jwtHeader').textContent = 'Failed to decode header'; }
+  
+  try {
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    // Annotate timestamps
+    let text = JSON.stringify(payload, null, 2);
+    if (payload.iat) text += `\n\n— Issued: ${new Date(payload.iat * 1000).toISOString()}`;
+    if (payload.exp) {
+      const expDate = new Date(payload.exp * 1000);
+      const expired = expDate < new Date();
+      text += `\n— Expires: ${expDate.toISOString()}${expired ? ' [EXPIRED]' : ' [VALID]'}`;
+    }
+    if (payload.nbf) text += `\n— Not Before: ${new Date(payload.nbf * 1000).toISOString()}`;
+    document.getElementById('jwtPayload').textContent = text;
+  } catch { document.getElementById('jwtPayload').textContent = 'Failed to decode payload'; }
+  
+  document.getElementById('jwtSignature').textContent = parts[2] + '\n\n⚠ Signature verification requires\nthe signing key (not available\nclient-side)';
+}
+
+// ============== SECURITY HEADER CHECK (Simulated) ==============
+function checkHeaders() {
+  const domain = document.getElementById('headerUrl').value.trim() || 'example.com';
+  const grid = document.getElementById('headersGrid');
+  const gradeEl = document.getElementById('headerGrade');
+  
+  grid.innerHTML = '<div class="header-row header-head"><div>Header</div><div>Status</div><div>Grade</div></div>';
+  
+  const headers = [
+    { name: 'Content-Security-Policy', present: Math.random() > 0.4, critical: true },
+    { name: 'Strict-Transport-Security', present: Math.random() > 0.3, critical: true },
+    { name: 'X-Content-Type-Options', present: Math.random() > 0.2, critical: false },
+    { name: 'X-Frame-Options', present: Math.random() > 0.3, critical: false },
+    { name: 'X-XSS-Protection', present: Math.random() > 0.5, critical: false },
+    { name: 'Referrer-Policy', present: Math.random() > 0.4, critical: false },
+    { name: 'Permissions-Policy', present: Math.random() > 0.5, critical: false },
+    { name: 'Cross-Origin-Embedder-Policy', present: Math.random() > 0.6, critical: false },
+    { name: 'Cross-Origin-Opener-Policy', present: Math.random() > 0.6, critical: false },
+    { name: 'Cross-Origin-Resource-Policy', present: Math.random() > 0.6, critical: false },
+    { name: 'X-Permitted-Cross-Domain', present: Math.random() > 0.7, critical: false },
+    { name: 'Cache-Control', present: Math.random() > 0.3, critical: false },
+  ];
+  
+  let score = 0;
+  headers.forEach(h => {
+    const grade = h.present ? (h.critical ? 'A' : 'A') : (h.critical ? 'F' : 'C');
+    if (h.present) score += h.critical ? 15 : 5;
+    const gradeClass = grade === 'A' ? 'grade-a' : grade === 'B' ? 'grade-b' : grade === 'C' ? 'grade-c' : 'grade-f';
+    const row = document.createElement('div');
+    row.className = 'header-row';
+    row.innerHTML = `<div style="color:var(--text-primary)">${h.name}</div><div class="${h.present ? 'text-green' : 'text-pink'}">${h.present ? 'Present' : 'Missing'}</div><div class="${gradeClass}">${grade}</div>`;
+    grid.appendChild(row);
+  });
+  
+  const overall = score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : 'F';
+  const overallClass = overall === 'A' ? 'grade-a' : overall === 'B' ? 'grade-b' : overall === 'C' ? 'grade-c' : 'grade-f';
+  gradeEl.innerHTML = `<div style="font-family:'Orbitron',sans-serif;font-size:2.5rem;font-weight:900" class="${overallClass}">${overall}</div><div style="font-size:0.7rem;color:var(--text-muted)">Security Header Grade for ${domain} • Score: ${score}/100</div>`;
+  
+  addLog(score >= 60 ? 'info' : 'warn', `Header audit: ${domain} — Grade ${overall} (${score}/100)`);
+}
+
+// ============== THREAT RADAR ==============
+const radarCanvas = document.getElementById('radarCanvas');
+const radarCtx = radarCanvas.getContext('2d');
+let radarAngle = 0;
+let radarBlips = [];
+
+function resizeRadar() {
+  const rect = radarCanvas.parentElement.getBoundingClientRect();
+  const size = Math.min(rect.width - 32, 300);
+  radarCanvas.width = size * 2;
+  radarCanvas.height = size * 2;
+  radarCanvas.style.width = size + 'px';
+  radarCanvas.style.height = size + 'px';
+}
+
+function drawRadar() {
+  resizeRadar();
+  const w = radarCanvas.width, h = radarCanvas.height;
+  const cx = w / 2, cy = h / 2, r = Math.min(cx, cy) - 10;
+  
+  radarCtx.clearRect(0, 0, w, h);
+  
+  // Rings
+  for (let i = 1; i <= 4; i++) {
+    radarCtx.beginPath();
+    radarCtx.arc(cx, cy, r * i / 4, 0, Math.PI * 2);
+    radarCtx.strokeStyle = 'rgba(0,240,255,0.15)';
+    radarCtx.lineWidth = 1;
+    radarCtx.stroke();
+  }
+  
+  // Cross
+  radarCtx.strokeStyle = 'rgba(0,240,255,0.1)';
+  radarCtx.beginPath(); radarCtx.moveTo(cx, cy - r); radarCtx.lineTo(cx, cy + r); radarCtx.stroke();
+  radarCtx.beginPath(); radarCtx.moveTo(cx - r, cy); radarCtx.lineTo(cx + r, cy); radarCtx.stroke();
+  
+  // Sweep
+  const grad = radarCtx.createConicalGradient ? null : null;
+  radarCtx.save();
+  radarCtx.translate(cx, cy);
+  radarCtx.rotate(radarAngle);
+  const sweepGrad = radarCtx.createLinearGradient(0, 0, r, 0);
+  sweepGrad.addColorStop(0, 'rgba(0,240,255,0.3)');
+  sweepGrad.addColorStop(1, 'rgba(0,240,255,0.02)');
+  radarCtx.beginPath();
+  radarCtx.moveTo(0, 0);
+  radarCtx.arc(0, 0, r, -0.5, 0);
+  radarCtx.closePath();
+  radarCtx.fillStyle = sweepGrad;
+  radarCtx.fill();
+  
+  // Sweep line
+  radarCtx.beginPath();
+  radarCtx.moveTo(0, 0);
+  radarCtx.lineTo(r, 0);
+  radarCtx.strokeStyle = 'rgba(0,240,255,0.6)';
+  radarCtx.lineWidth = 2;
+  radarCtx.stroke();
+  radarCtx.restore();
+  
+  // Blips
+  radarBlips.forEach(b => {
+    const age = (Date.now() - b.born) / b.lifetime;
+    if (age > 1) return;
+    const alpha = 1 - age;
+    const bx = cx + Math.cos(b.angle) * b.dist * r;
+    const by = cy + Math.sin(b.angle) * b.dist * r;
+    const colors = { critical: '#ff003c', high: '#ff2d95', medium: '#ffaa00', low: '#00f0ff' };
+    const color = colors[b.severity] || colors.low;
+    
+    radarCtx.beginPath();
+    radarCtx.arc(bx, by, 4 + (1 - alpha) * 6, 0, Math.PI * 2);
+    radarCtx.fillStyle = color + Math.floor(alpha * 255).toString(16).padStart(2, '0');
+    radarCtx.fill();
+    
+    radarCtx.beginPath();
+    radarCtx.arc(bx, by, 2, 0, Math.PI * 2);
+    radarCtx.fillStyle = color;
+    radarCtx.fill();
+  });
+  
+  radarBlips = radarBlips.filter(b => (Date.now() - b.born) / b.lifetime < 1);
+  
+  // Center dot
+  radarCtx.beginPath();
+  radarCtx.arc(cx, cy, 3, 0, Math.PI * 2);
+  radarCtx.fillStyle = '#00f0ff';
+  radarCtx.fill();
+  
+  radarAngle += 0.03;
+  requestAnimationFrame(drawRadar);
+}
+
+function addRadarBlip(severity) {
+  radarBlips.push({
+    angle: Math.random() * Math.PI * 2,
+    dist: 0.2 + Math.random() * 0.7,
+    severity,
+    born: Date.now(),
+    lifetime: 4000 + Math.random() * 4000
+  });
+}
+
+// ============== SYSTEM LOG ==============
+function addLog(type, msg) {
+  const container = document.getElementById('logEntries');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  const time = new Date().toTimeString().split(' ')[0];
+  entry.innerHTML = `<span class="log-time">${time}</span><span class="log-msg log-${type}">${msg}</span>`;
+  container.prepend(entry);
+  if (container.children.length > 50) container.removeChild(container.lastChild);
+}
+
+// ============== THREAT FEED ==============
+const threatTypes = [
+  { title: 'Ransomware Campaign Detected', body: 'New LockBit 4.0 variant targeting healthcare infrastructure via phishing emails with macro-enabled Office documents.', severity: 'critical', tags: ['ransomware', 'phishing', 'healthcare'] },
+  { title: 'Zero-Day in Palo Alto PAN-OS', body: 'Unauthenticated RCE vulnerability in GlobalProtect gateway. Actively exploited in the wild. Patch immediately.', severity: 'critical', tags: ['zero-day', 'firewall', 'CVE-2026-0001'] },
+  { title: 'APT41 Infrastructure Expansion', body: 'Chinese state-sponsored group expanding C2 infrastructure across Southeast Asian cloud providers.', severity: 'high', tags: ['APT', 'nation-state', 'C2'] },
+  { title: 'Credential Stuffing Wave', body: 'Automated credential stuffing attacks observed against major SaaS platforms using recently leaked databases.', severity: 'high', tags: ['credential-stuffing', 'SaaS', 'brute-force'] },
+  { title: 'Malicious npm Package Discovered', body: 'Package "event-stream-handler" found exfiltrating environment variables to external C2 server.', severity: 'high', tags: ['supply-chain', 'npm', 'exfiltration'] },
+  { title: 'DNS Tunneling Activity Surge', body: 'Anomalous DNS TXT record queries indicative of data exfiltration via DNS tunneling from enterprise networks.', severity: 'medium', tags: ['DNS', 'tunneling', 'exfiltration'] },
+  { title: 'BGP Hijack Attempt', body: 'Suspicious BGP announcements detected for prefixes belonging to major CDN providers. Possible traffic interception attempt.', severity: 'medium', tags: ['BGP', 'routing', 'hijack'] },
+  { title: 'WordPress Plugin Vulnerability', body: 'SQL injection in WP-FormBuilder affecting 2M+ installations. Exploit code published on GitHub.', severity: 'medium', tags: ['wordpress', 'SQLi', 'web'] },
+  { title: 'TLS Certificate Transparency Alert', body: 'Unauthorized certificate issued for corporate domain detected in CT logs. Possible MitM preparation.', severity: 'medium', tags: ['TLS', 'certificate', 'MitM'] },
+  { title: 'IoT Botnet Recruitment', body: 'Mirai variant scanning for exposed Telnet services on consumer IoT devices. Default credentials targeted.', severity: 'low', tags: ['IoT', 'botnet', 'Mirai'] },
+  { title: 'Outdated SSH Server Detected', body: 'Internal scan found SSH servers running OpenSSH < 8.0 with known vulnerabilities. Upgrade recommended.', severity: 'low', tags: ['SSH', 'patching', 'internal'] },
+  { title: 'Phishing Domain Registration Spike', body: 'Bulk registration of look-alike domains mimicking popular banking sites detected via passive DNS monitoring.', severity: 'high', tags: ['phishing', 'DNS', 'banking'] },
+  { title: 'Cobalt Strike Beacon Detected', body: 'Network traffic analysis identified Cobalt Strike C2 beaconing pattern from internal workstation.', severity: 'critical', tags: ['C2', 'cobalt-strike', 'lateral-movement'] },
+  { title: 'Cloud Storage Misconfiguration', body: 'Publicly accessible S3 bucket containing PII discovered during external attack surface assessment.', severity: 'high', tags: ['cloud', 'S3', 'data-exposure'] },
+  { title: 'Kerberoasting Activity', body: 'Anomalous TGS-REP requests detected targeting service accounts with weak encryption types.', severity: 'medium', tags: ['kerberos', 'active-directory', 'privilege-escalation'] },
+];
+
+let feedIndex = 0;
+function addThreatCard() {
+  const threat = threatTypes[feedIndex % threatTypes.length];
+  feedIndex++;
+  const container = document.getElementById('threatFeedContainer');
+  const card = document.createElement('div');
+  card.className = 'threat-card';
+  const now = new Date();
+  card.innerHTML = `
+    <div class="threat-card-header">
+      <div class="threat-card-title">${threat.title}</div>
+      <div class="threat-severity severity-${threat.severity}">${threat.severity.toUpperCase()}</div>
+    </div>
+    <div class="threat-card-body">${threat.body}</div>
+    <div style="margin-bottom:0.4rem">${threat.tags.map(t => `<span class="threat-tag">${t}</span>`).join('')}</div>
+    <div class="threat-card-meta">
+      <span>◷ ${now.toTimeString().split(' ')[0]}</span>
+      <span>⚡ Feed #${feedIndex}</span>
+      <span>Source: ThreatFeed</span>
+    </div>
+  `;
+  container.prepend(card);
+  if (container.children.length > 30) container.removeChild(container.lastChild);
+  
+  document.getElementById('threatCount').textContent = feedIndex;
+  addRadarBlip(threat.severity);
+  
+  const logType = threat.severity === 'critical' ? 'error' : threat.severity === 'high' ? 'warn' : 'info';
+  addLog(logType, `[THREAT] ${threat.severity.toUpperCase()}: ${threat.title}`);
+}
+
+// ============== MITRE ATT&CK ==============
+const mitreTactics = [
+  'Reconnaissance','Resource Dev','Initial Access','Execution','Persistence','Priv Escalation',
+  'Defense Evasion','Credential Access','Discovery','Lateral Movement','Collection','C2',
+  'Exfiltration','Impact','Pre-Attack'
+];
+
+function buildMitre() {
+  const grid = document.getElementById('mitreGrid');
+  mitreTactics.forEach(t => {
+    const cell = document.createElement('div');
+    cell.className = 'mitre-cell' + (Math.random() > 0.5 ? ' active' : '');
+    cell.textContent = t;
+    cell.title = `MITRE ATT&CK: ${t}`;
+    cell.addEventListener('click', () => {
+      cell.classList.toggle('active');
+      addLog('info', `MITRE toggle: ${t}`);
+    });
+    grid.appendChild(cell);
+  });
+}
+
+// ============== LIVE METRICS ==============
+function updateMetrics() {
+  const threats = 12 + Math.floor(Math.random() * 8);
+  const packets = (45000 + Math.floor(Math.random() * 15000)).toLocaleString();
+  const latency = (8 + Math.random() * 12).toFixed(1);
+  
+  animateMetric('metricThreats', threats);
+  document.getElementById('metricPackets').textContent = packets;
+  document.getElementById('metricLatency').textContent = latency;
+}
+
+function animateMetric(id, target) {
+  const el = document.getElementById(id);
+  const current = parseInt(el.textContent) || 0;
+  const diff = target - current;
+  const steps = 20;
+  let step = 0;
+  const interval = setInterval(() => {
+    step++;
+    el.textContent = Math.floor(current + diff * (step / steps));
+    if (step >= steps) clearInterval(interval);
+  }, 30);
+}
+
+// ============== AUTO LOG MESSAGES ==============
+const autoLogs = [
+  ['info', 'Packet inspection: nominal throughput'],
+  ['info', 'TLS handshake verified: ECDHE-RSA-AES256-GCM'],
+  ['info', 'Firewall rule #247 matched: allow outbound HTTPS'],
+  ['warn', 'Rate limit threshold approaching: /api/auth endpoint'],
+  ['info', 'DNS resolution: cdn.provider.net → 104.16.x.x'],
+  ['success', 'Signature update: IDS ruleset v2026.03.27'],
+  ['info', 'Connection pool: 847/1000 active sessions'],
+  ['warn', 'Certificate expiry: *.internal.corp (14 days)'],
+  ['info', 'Geofence check: request from AS13335 — allowed'],
+  ['success', 'Vulnerability scan: 0 critical findings'],
+  ['error', 'Blocked: SQL injection attempt on /search endpoint'],
+  ['warn', 'Brute force detector: 50+ failed logins from 45.x.x.x'],
+  ['success', 'SIEM correlation: false positive resolved'],
+  ['info', 'Load balancer: health check passed on all nodes'],
+  ['info', 'WAF: 2,847 requests inspected, 3 blocked'],
+];
+
+// ============== START APP ==============
+function startApp() {
+  buildMitre();
+  drawRadar();
+  
+  // Initial threat cards
+  for (let i = 0; i < 5; i++) setTimeout(() => addThreatCard(), i * 300);
+  
+  // Periodic updates
+  setInterval(() => addThreatCard(), 8000 + Math.random() * 7000);
+  setInterval(updateMetrics, 3000);
+  setInterval(() => {
+    const log = autoLogs[Math.floor(Math.random() * autoLogs.length)];
+    addLog(log[0], log[1]);
+  }, 2000 + Math.random() * 3000);
+  
+  // Initial metrics
+  updateMetrics();
+  
+  // Initial logs
+  addLog('success', 'NEXUS::SENTINEL initialized');
+  addLog('info', 'All threat intelligence modules online');
+  addLog('info', 'Operator session authenticated');
+}
+
+// ============== INIT ==============
+window.addEventListener('DOMContentLoaded', () => {
+  runBoot();
+});
+</script>
+</body>
+</html>
